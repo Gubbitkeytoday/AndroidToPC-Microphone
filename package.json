@@ -1,0 +1,32 @@
+{
+  "name": "android-to-pc-microphone",
+  "version": "1.0.0",
+  "description": "Ultra-Low-Latency Wireless & USB Android Microphone to PC Audio Streaming System",
+  "main": "server/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node server/server.js",
+    "receiver:py": "python server/receiver.py"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "qrcode": "^1.5.4",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  },
+  "keywords": [
+    "android",
+    "microphone",
+    "audio-streaming",
+    "webaudio",
+    "websocket",
+    "low-latency",
+    "virtual-mic"
+  ],
+  "author": "Gubbitkeytoday",
+  "license": "MIT"
+}

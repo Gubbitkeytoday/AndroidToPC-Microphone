@@ -1,0 +1,23 @@
+name: 🚀 Feature Request
+description: Propose an enhancement for audio streaming, noise suppression, or connection methods
+title: "[FEAT]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for suggesting an idea!
+  - type: textarea
+    id: problem
+    attributes:
+      label: Feature Motivation
+      description: What challenge does this feature address?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: How should this feature work?
+    validations:
+      required: true

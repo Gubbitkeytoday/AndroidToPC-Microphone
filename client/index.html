@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Android to PC Microphone 🎙️</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background-color: #09090b;
+      color: #f4f4f5;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body class="flex flex-col min-h-screen bg-zinc-950 text-zinc-100 antialiased p-4 select-none">
+  <!-- Top Bar -->
+  <header class="flex items-center justify-between py-3 border-b border-zinc-800">
+    <div class="flex items-center gap-2 font-bold text-lg text-white">
+      <div class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center">
+        🎙️
+      </div>
+      <div>
+        <h1>PhoneMic to PC</h1>
+        <p class="text-[10px] text-zinc-400 font-normal">Ultra-Low-Latency Audio Stream</p>
+      </div>
+    </div>
+    <div id="statusBadge" class="px-2.5 py-1 rounded-full text-xs font-semibold bg-zinc-800 text-zinc-400 border border-zinc-700">
+      Disconnected
+    </div>
+  </header>
+
+  <!-- Main Controls -->
+  <main class="flex-1 flex flex-col items-center justify-center gap-6 my-6">
+    <!-- Big Mic Power Button -->
+    <button id="micBtn" class="w-44 h-44 rounded-full bg-zinc-900 border-4 border-zinc-800 hover:border-emerald-500 flex flex-col items-center justify-center gap-3 transition shadow-2xl active:scale-95 group">
+      <span id="micIcon" class="text-5xl group-hover:scale-110 transition">🔴</span>
+      <span id="micLabel" class="text-sm font-bold tracking-wider uppercase text-zinc-400">TAP TO STREAM</span>
+    </button>
+
+    <!-- Live VU Meter & Audio Visualizer -->
+    <div class="w-full max-w-xs flex flex-col gap-2">
+      <div class="flex justify-between text-xs font-mono text-zinc-400">
+        <span>INPUT LEVEL</span>
+        <span id="dbValue">-inf dB</span>
+      </div>
+      <div class="w-full h-3 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800">
+        <div id="vuBar" class="h-full bg-emerald-500 transition-all duration-75 w-0"></div>
+      </div>
+    </div>
+
+    <!-- Controls Panel -->
+    <div class="w-full max-w-xs bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 flex flex-col gap-4">
+      <!-- Gain Slider -->
+      <div>
+        <div class="flex justify-between text-xs font-medium text-zinc-300 mb-1.5">
+          <span>Mic Gain Boost</span>
+          <span id="gainText" class="font-mono text-emerald-400">1.0x</span>
+        </div>
+        <input type="range" id="gainSlider" min="0.5" max="3.0" step="0.1" value="1.0" class="w-full accent-emerald-500">
+      </div>
+
+      <!-- Sample Rate Info -->
+      <div class="flex justify-between items-center text-xs text-zinc-400 border-t border-zinc-800/60 pt-3">
+        <span>Audio Format</span>
+        <span class="font-mono text-zinc-200">PCM 48kHz / 16-bit Mono</span>
+      </div>
+    </div>
+  </main>
+
+  <!-- Pairing / QR Info -->
+  <footer class="text-center text-xs text-zinc-400 py-3 border-t border-zinc-800">
+    <p>Ensure PC and Phone are on the same Wi-Fi network.</p>
+  </footer>
+
+  <script>
+    let isStreaming = false;
+    let ws = null;
+    let audioCtx = null;
+    let mediaStream = null;
+    let gainNode = null;
+    let analyserNode = null;
+    let scriptProcessor = null;
+
+    const micBtn = document.getElementById('micBtn');
+    const micIcon = document.getElementById('micIcon');
+    const micLabel = document.getElementById('micLabel');
+    const statusBadge = document.getElementById('statusBadge');
+    const vuBar = document.getElementById('vuBar');
+    const dbValue = document.getElementById('dbValue');
+    const gainSlider = document.getElementById('gainSlider');
+    const gainText = document.getElementById('gainText');
+
+    gainSlider.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      gainText.textContent = `${val.toFixed(1)}x`;
+      if (gainNode) gainNode.gain.value = val;
+    });
+
+    async function startAudio() {
+      try {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}?role=sender`;
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          statusBadge.textContent = 'Streaming Live';
+          statusBadge.className = 'px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30';
+          micIcon.textContent = '🟢';
+          micLabel.textContent = 'TRANSMITTING';
+          micBtn.className = 'w-44 h-44 rounded-full bg-emerald-950/40 border-4 border-emerald-500 flex flex-col items-center justify-center gap-3 transition shadow-2xl active:scale-95';
+        };
+
+        ws.onclose = () => {
+          stopAudio();
+        };
+
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            sampleRate: 48000,
+            channelCount: 1,
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+          }
+        });
+
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+        const source = audioCtx.createMediaStreamSource(mediaStream);
+        gainNode = audioCtx.createGain();
+        gainNode.gain.value = parseFloat(gainSlider.value);
+
+        analyserNode = audioCtx.createAnalyser();
+        analyserNode.fftSize = 256;
+
+        scriptProcessor = audioCtx.createScriptProcessor(1024, 1, 1);
+
+        source.connect(gainNode);
+        gainNode.connect(analyserNode);
+        analyserNode.connect(scriptProcessor);
+        scriptProcessor.connect(audioCtx.destination);
+
+        scriptProcessor.onaudioprocess = (e) => {
+          if (!isStreaming || ws.readyState !== WebSocket.OPEN) return;
+          const input = e.inputBuffer.getChannelData(0);
+          
+          // Convert Float32Array to Int16 PCM bytes
+          const buffer = new ArrayBuffer(input.length * 2);
+          const view = new DataView(buffer);
+          for (let i = 0; i < input.length; i++) {
+            let s = Math.max(-1, Math.min(1, input[i]));
+            view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+          }
+          ws.send(buffer);
+        };
+
+        updateVU();
+        isStreaming = true;
+      } catch (err) {
+        alert(`Microphone Access Error: ${err.message}`);
+        stopAudio();
+      }
+    }
+
+    function stopAudio() {
+      isStreaming = false;
+      if (ws) ws.close();
+      if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
+      if (audioCtx) audioCtx.close();
+
+      statusBadge.textContent = 'Disconnected';
+      statusBadge.className = 'px-2.5 py-1 rounded-full text-xs font-semibold bg-zinc-800 text-zinc-400 border border-zinc-700';
+      micIcon.textContent = '🔴';
+      micLabel.textContent = 'TAP TO STREAM';
+      micBtn.className = 'w-44 h-44 rounded-full bg-zinc-900 border-4 border-zinc-800 hover:border-emerald-500 flex flex-col items-center justify-center gap-3 transition shadow-2xl active:scale-95 group';
+      vuBar.style.width = '0%';
+      dbValue.textContent = '-inf dB';
+    }
+
+    function updateVU() {
+      if (!isStreaming || !analyserNode) return;
+      const data = new Uint8Array(analyserNode.frequencyBinCount);
+      analyserNode.getByteFrequencyData(data);
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) sum += data[i];
+      const avg = sum / data.length;
+      const pct = Math.min(100, Math.round((avg / 255) * 100 * 2.5));
+      vuBar.style.width = `${pct}%`;
+      dbValue.textContent = `${Math.round(pct - 100)} dB`;
+      requestAnimationFrame(updateVU);
+    }
+
+    micBtn.addEventListener('click', () => {
+      if (isStreaming) {
+        stopAudio();
+      } else {
+        startAudio();
+      }
+    });
+  </script>
+</body>
+</html>

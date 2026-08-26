@@ -1,0 +1,28 @@
+name: 🐛 Bug Report
+description: Report an audio streaming defect, latency issue, or connection error
+title: "[BUG]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue in Android to PC Microphone!
+  - type: textarea
+    id: description
+    attributes:
+      label: Description of the Bug
+      description: Clear summary of the issue.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Detailed reproduction steps.
+      placeholder: |
+        1. Start server on Windows PC
+        2. Open PWA client on Android Chrome
+        3. Tap Start Stream
+        4. Audio crackles or fails to bridge
+    validations:
+      required: true
